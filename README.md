@@ -5,8 +5,8 @@
 Game rules today are code you have to trust. RuleChip turns them into **circuits you can prove**: on-chain NAND circuits taped out with [TapeOut](https://tapeout.net) on **X Layer**. Anyone can call them for free, nobody can change them, and each one is small enough to be verified exhaustively.
 
 > 🎮 **Live demo:** `https://lichao01111-dot.github.io/rulechip/`  
-> 🎬 **Video:** `<(https://x.com/lichao0111/status/2102792970403450901/video/1)>`  
-> 🐦 **X post:** `<[link](https://x.com/lichao0111/status/2102792970403450901)>`
+> 🎬 **Video:** `https://x.com/lichao0111/status/2102792970403450901/video/1`  
+> 🐦 **X post:** `https://x.com/lichao0111/status/2102792970403450901`
 
 Built for the **TapeOut Genesis Transistor Hackathon** (IGNIX × X Layer × TapeOut).
 
