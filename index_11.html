@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>RuleChip</title>
+<meta name="description" content="Snake whose wall rule is a TapeOut circuit on X Layer. Swap the circuit, change the game.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100..125,600..800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ---------- Tokens: light = datasheet paper, dark = die substrate ---------- */
+:root{
+  --paper:#F2F4F1; --sheet:#FBFCFA; --ink:#0F1613; --ink2:#46524C; --muted:#6E7A73; --rule:#D3DAD5; --rule2:#E4E9E5;
+  --accent:#0B7A55; --accent-ink:#FFFFFF; --gold:#B8871B; --chip:#1A1F1D; --chip-ink:#E9EEEA; --chip-mute:#9AA59F;
+  --ok:#17804F; --bad:#C2362B; --warn:#B7791F; --pending:#DCE2DE;
+  --wrap:#2B59C3; --dead:#C2362B; --hybrid:#7A4CC2;
+  --grid:#EEF1EE; --grid2:#E6EAE7; --snake:#16201B; --head:#0B7A55; --food:#C2362B; --line:#D3DAD5;
+  --shadow:0 1px 0 rgba(15,22,19,.04), 0 10px 30px -12px rgba(15,22,19,.18);
+  --display:"Archivo","IBM Plex Sans","PingFang SC","Microsoft YaHei",sans-serif;
+  --body:"IBM Plex Sans","PingFang SC","Hiragino Sans GB","Microsoft YaHei",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --paper:#0B100E; --sheet:#111815; --ink:#E4EBE7; --ink2:#B4C0B9; --muted:#85928B; --rule:#25302B; --rule2:#1B2420;
+  --accent:#3DB384; --accent-ink:#06120D; --gold:#D6A93E; --chip:#050807; --chip-ink:#E9EEEA; --chip-mute:#8E9A94;
+  --ok:#3DB384; --bad:#F06A5E; --warn:#E0A544; --pending:#1F2925;
+  --wrap:#6E95F2; --dead:#F06A5E; --hybrid:#B08BF0;
+  --grid:#141C18; --grid2:#18211D; --snake:#DDE6E1; --head:#3DB384; --food:#F06A5E; --line:#25302B;
+  --shadow:0 1px 0 rgba(255,255,255,.03), 0 14px 34px -14px rgba(0,0,0,.7);
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0B100E; --sheet:#111815; --ink:#E4EBE7; --ink2:#B4C0B9; --muted:#85928B; --rule:#25302B; --rule2:#1B2420;
+  --accent:#3DB384; --accent-ink:#06120D; --gold:#D6A93E; --chip:#050807; --chip-ink:#E9EEEA; --chip-mute:#8E9A94;
+  --ok:#3DB384; --bad:#F06A5E; --warn:#E0A544; --pending:#1F2925;
+  --wrap:#6E95F2; --dead:#F06A5E; --hybrid:#B08BF0;
+  --grid:#141C18; --grid2:#18211D; --snake:#DDE6E1; --head:#3DB384; --food:#F06A5E; --line:#25302B;
+  --shadow:0 1px 0 rgba(255,255,255,.03), 0 14px 34px -14px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased}
+body{background-image:linear-gradient(var(--rule2) 1px,transparent 1px),linear-gradient(90deg,var(--rule2) 1px,transparent 1px);background-size:24px 24px;background-position:-1px -1px}
+.mono{font-family:var(--mono)}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1200px;margin:0 auto;padding-inline:20px;padding-block:20px 64px;display:flex;flex-direction:column;gap:28px}
+@media (max-width:520px){.wrap{padding-inline:16px}}
+
+/* ---------- Datasheet header ---------- */
+.masthead{display:grid;grid-template-columns:auto 1fr auto;border:1.5px solid var(--ink);background:var(--sheet)}
+.pn-block{padding:14px 18px;border-right:1.5px solid var(--ink);display:flex;flex-direction:column;justify-content:center}
+.pn-block .brand{font-family:var(--display);font-stretch:125%;font-weight:800;font-size:26px;letter-spacing:-.01em;line-height:1}
+.pn-block .brand span{color:var(--accent)}
+.pn-block .sub{font-family:var(--mono);font-size:11px;color:var(--muted);margin-top:6px;letter-spacing:.04em}
+.meta-table{display:grid;grid-template-columns:repeat(4,minmax(0,1fr))}
+.meta-table div{padding:10px 14px;border-right:1px solid var(--rule);min-width:0}
+.meta-table div:last-child{border-right:0}
+.meta-table dt{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.meta-table dd{margin:3px 0 0;font-family:var(--mono);font-size:12.5px;font-weight:500;overflow-wrap:anywhere}
+.theme-cell{display:flex;align-items:center;padding:0 12px;border-left:1.5px solid var(--ink)}
+.iconbtn{font:inherit;font-family:var(--mono);font-size:12px;background:transparent;color:var(--ink);border:1px solid var(--rule);padding:6px 10px;cursor:pointer}
+.iconbtn:hover{border-color:var(--ink)}
+@media (max-width:900px){.masthead{grid-template-columns:1fr auto}.pn-block{border-right:0;border-bottom:1.5px solid var(--ink)}.meta-table{grid-column:1/-1;grid-row:2;grid-template-columns:1fr 1fr}.meta-table div:nth-child(2){border-right:0}.meta-table div:nth-child(-n+2){border-bottom:1px solid var(--rule)}.theme-cell{grid-column:2;grid-row:1;border-left:0;border-bottom:1.5px solid var(--ink)}}
+
+/* ---------- Thesis ---------- */
+.thesis{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:32px;align-items:center}
+@media (max-width:900px){.thesis{grid-template-columns:1fr}}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.16em;text-transform:uppercase;color:var(--accent);font-weight:600}
+.thesis h1{font-family:var(--display);font-stretch:112%;font-weight:800;font-size:clamp(30px,4.6vw,54px);line-height:1.02;letter-spacing:-.025em;margin:12px 0 16px;text-wrap:balance}
+.thesis h1 s{color:var(--muted);text-decoration-thickness:.09em;text-decoration-color:var(--bad);font-weight:600}
+.thesis h1 em{font-style:normal;color:var(--accent)}
+.thesis p{margin:0;color:var(--ink2);max-width:62ch;font-size:15.5px}
+.props{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:22px;border-top:1.5px solid var(--ink)}
+@media (max-width:700px){.props{grid-template-columns:1fr 1fr}}
+.props div{padding:12px 14px 4px 0}
+.props b{display:block;font-family:var(--display);font-stretch:112%;font-size:15px;margin-bottom:2px}
+.props b small{font-family:var(--mono);font-weight:400;font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;margin-left:6px}
+.props span{font-size:13px;color:var(--muted);line-height:1.5}
+.pinout{background:var(--sheet);border:1px solid var(--rule);padding:16px 10px 10px;box-shadow:var(--shadow)}
+.pinout svg{display:block;width:100%;height:auto;max-width:100%}
+.pinout .cap{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:center;letter-spacing:.06em;margin-top:6px}
+
+/* ---------- Sections ---------- */
+.sec-h{display:flex;align-items:baseline;gap:12px;border-bottom:1.5px solid var(--ink);padding-bottom:8px;margin-bottom:16px;flex-wrap:wrap}
+.sec-h .no{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+.sec-h h2{font-family:var(--display);font-stretch:112%;font-weight:800;font-size:20px;margin:0;letter-spacing:-.01em}
+.sec-h .note{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.panel{background:var(--sheet);border:1px solid var(--rule);padding:16px;min-width:0}
+.label{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);margin:0 0 10px;font-weight:500}
+
+/* ---------- Evaluation board ---------- */
+.board-grid{display:grid;grid-template-columns:minmax(0,440px) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:920px){.board-grid{grid-template-columns:1fr}}
+.col{display:flex;flex-direction:column;gap:20px;min-width:0}
+.pcb{background:var(--sheet);border:1px solid var(--rule);padding:14px;box-shadow:var(--shadow)}
+.board-wrap{position:relative;width:100%;max-width:412px;margin:0 auto}
+canvas#board{width:100%;max-width:100%;aspect-ratio:1/1;display:block;background:var(--grid);touch-action:none}
+.overlay{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:color-mix(in srgb,var(--sheet) 82%,transparent);backdrop-filter:blur(3px);text-align:center;padding:16px}
+.overlay.hidden{display:none}
+.overlay .big{font-family:var(--display);font-stretch:112%;font-size:26px;font-weight:800;letter-spacing:-.01em}
+.overlay .small{color:var(--muted);font-size:13px;max-width:34ch}
+.hud{display:grid;grid-template-columns:repeat(3,1fr);margin-top:12px;border-top:1px solid var(--rule)}
+.hud span{padding-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.hud b{display:block;font-family:var(--display);font-stretch:112%;font-size:20px;color:var(--ink);letter-spacing:0;text-transform:none;font-variant-numeric:tabular-nums}
+button{font:inherit;cursor:pointer}
+.btn{border:1.5px solid var(--ink);background:var(--sheet);color:var(--ink);padding:9px 16px;font-weight:600;font-size:14px}
+.btn:hover{background:var(--rule2)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.pad{display:none;grid-template-columns:repeat(3,54px);grid-template-rows:repeat(2,46px);gap:6px;justify-content:center;margin-top:12px}
+.pad button{padding:0;font-size:18px;border:1px solid var(--rule);background:var(--sheet);color:var(--ink)}
+@media (pointer:coarse){.pad{display:grid}}
+
+/* trace */
+.trace{display:grid;grid-template-columns:auto 1fr;gap:8px 12px;align-items:center;font-size:12px}
+.trace>span{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+.bits{display:flex;gap:3px;flex-wrap:wrap}
+.bit{width:36px;text-align:center;border:1px solid var(--rule);padding:3px 0;font-family:var(--mono);font-size:12px;line-height:1.2;background:var(--paper)}
+.bit small{display:block;color:var(--muted);font-size:9px}
+.bit.on{background:color-mix(in srgb,var(--accent) 16%,var(--sheet));border-color:var(--accent);color:var(--ink)}
+.bit.deadon{background:color-mix(in srgb,var(--bad) 18%,var(--sheet));border-color:var(--bad)}
+.callline{font-family:var(--mono);font-size:12px;margin-top:12px;padding:9px 11px;background:var(--paper);border-left:3px solid var(--accent);overflow-x:auto;white-space:nowrap}
+.audit{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-top:12px;font-size:12px;color:var(--muted)}
+.audit b{color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums} .audit .ok{color:var(--ok)} .audit .bad{color:var(--bad)} .audit .pend{color:var(--warn)}
+.audit .st{font-weight:600;padding:3px 9px;border:1px solid currentColor;font-size:12px}
+.audit .st.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 10%,transparent)}
+.audit .st.pend{color:var(--warn);background:color-mix(in srgb,var(--warn) 10%,transparent)}
+.audit .st.bad{color:var(--bad);background:color-mix(in srgb,var(--bad) 10%,transparent)}
+
+/* cartridges as IC packages */
+.slot{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:16px;padding:14px 4px 6px}
+.cart{--c:var(--accent);position:relative;text-align:left;padding:16px 14px 14px;background:var(--chip);color:var(--chip-ink);border:0;border-radius:3px;
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--chip-ink) 8%,transparent), var(--shadow);transition:transform .18s ease, box-shadow .18s ease;display:flex;flex-direction:column;gap:2px;min-height:150px}
+.cart::before,.cart::after{content:"";position:absolute;left:12px;right:12px;height:7px;background:repeating-linear-gradient(90deg,var(--gold) 0 8px,transparent 8px 16px)}
+.cart::before{top:-7px} .cart::after{bottom:-7px}
+.cart .notch{position:absolute;top:0;left:50%;width:18px;height:9px;margin-left:-9px;border-radius:0 0 9px 9px;background:color-mix(in srgb,var(--chip-ink) 12%,var(--chip))}
+.cart .dot{position:absolute;top:12px;left:12px;width:7px;height:7px;border-radius:50%;background:color-mix(in srgb,var(--chip-ink) 22%,var(--chip))}
+.cart .pn{font-family:var(--mono);font-size:10.5px;color:var(--chip-mute);letter-spacing:.08em;margin:6px 0 2px 14px}
+.cart .name{font-family:var(--display);font-stretch:112%;font-weight:800;font-size:19px;letter-spacing:-.01em;color:var(--chip-ink)}
+.cart .name i{display:inline-block;width:9px;height:9px;background:var(--c);margin-right:7px;vertical-align:1px}
+.cart .desc{font-size:12.5px;color:var(--chip-mute);margin:2px 0 10px}
+.cart .meta{font-family:var(--mono);font-size:10.5px;color:var(--chip-mute);line-height:1.6;margin-top:auto}
+.cart .meta b{color:var(--chip-ink);font-weight:500}
+.cart .combo{font-family:var(--mono);font-size:10.5px;margin-top:6px;color:var(--c)}
+.cart:hover{transform:translateY(-2px)}
+.cart.active{transform:translateY(-3px);box-shadow:0 0 0 2px var(--c), 0 0 0 6px color-mix(in srgb,var(--c) 22%,transparent), var(--shadow)}
+.cart.active .pn::after{content:"  ● SEATED";color:var(--c)}
+.cart.loading .pn::after{content:"  ◌ READING";color:var(--gold)}
+.src{margin-top:14px;padding-top:12px;border-top:1px solid var(--rule);font-size:12.5px;color:var(--muted);display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between}
+.pill{font-family:var(--mono);font-size:11.5px;padding:3px 8px;border:1px solid var(--rule);color:var(--ink2)}
+.pill.chain{color:var(--ok);border-color:color-mix(in srgb,var(--ok) 50%,transparent);background:color-mix(in srgb,var(--ok) 8%,transparent)}
+.pill.snap{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 50%,transparent);background:color-mix(in srgb,var(--warn) 8%,transparent)}
+label.toggle{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none;color:var(--ink2)}
+label.toggle input{accent-color:var(--accent);width:16px;height:16px}
+
+/* ---------- Verification ---------- */
+.verify-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:20px;align-items:start}
+@media (max-width:920px){.verify-grid{grid-template-columns:1fr}}
+.vhead{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-bottom:12px}
+.vwrap{display:grid;grid-template-columns:20px minmax(0,1fr);grid-template-rows:auto auto;gap:3px;max-width:480px}
+.vcols,.vrows{font-family:var(--mono);font-size:9.5px;color:var(--muted)}
+.vcols{grid-column:2;display:grid;grid-template-columns:repeat(16,1fr);gap:3px;text-align:center}
+.vrows{display:grid;grid-template-rows:repeat(16,1fr);gap:3px;align-items:center;text-align:right;padding-right:3px}
+.vgrid{display:grid;grid-template-columns:repeat(16,1fr);gap:3px}
+.vgrid div{aspect-ratio:1/1;max-width:100%;background:var(--pending);cursor:pointer;transition:background .2s}
+.vgrid div:hover{outline:1px solid var(--ink)}
+.vgrid div.ok{background:var(--ok)}
+.vgrid div.okd{background:color-mix(in srgb,var(--ok) 50%,var(--bad))}
+.vgrid div.bad{background:var(--bad)}
+.vgrid div.run{background:var(--warn)}
+.vgrid div.half{background:color-mix(in srgb,var(--warn) 45%,var(--ok))}
+.vgrid div.sel{outline:2px solid var(--ink);outline-offset:1px}
+.legend{display:flex;gap:6px 14px;font-size:11.5px;color:var(--muted);margin-top:10px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;margin-right:5px;vertical-align:-1px}
+.vstats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));margin-top:14px;border-top:1px solid var(--rule)}
+.vstats span{padding-top:8px;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+.vstats b{display:block;font-family:var(--display);font-stretch:112%;color:var(--ink);font-size:22px;letter-spacing:0;font-variant-numeric:tabular-nums;text-transform:none}
+.verdict{margin-top:12px;padding:10px 12px;font-weight:600;display:none;border:1.5px solid currentColor}
+.verdict.ok{display:block;color:var(--ok);background:color-mix(in srgb,var(--ok) 9%,transparent)}
+.verdict.bad{display:block;color:var(--bad);background:color-mix(in srgb,var(--bad) 9%,transparent)}
+.detail{margin-top:10px;font-family:var(--mono);font-size:11.5px;color:var(--muted);min-height:18px;overflow-wrap:anywhere}
+pre{margin:0;font-family:var(--mono);font-size:12px;line-height:1.6;background:var(--paper);border:1px solid var(--rule);padding:12px 14px;overflow-x:auto;color:var(--ink2)}
+
+/* ---------- Signal path ---------- */
+.path{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));border:1px solid var(--rule);background:var(--sheet)}
+@media (max-width:760px){.path{grid-template-columns:1fr}}
+.path div{padding:14px 16px;border-right:1px solid var(--rule);position:relative;font-size:13.5px;color:var(--ink2)}
+.path div:last-child{border-right:0}
+@media (max-width:760px){.path div{border-right:0;border-bottom:1px solid var(--rule)}.path div:last-child{border-bottom:0}}
+.path b{display:block;font-family:var(--display);font-stretch:112%;font-size:15px;color:var(--ink);margin-bottom:4px}
+.path code{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.path .stage{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--accent);text-transform:uppercase}
+
+/* ---------- Roadmap ---------- */
+.road{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:0;border-top:1.5px solid var(--ink)}
+@media (max-width:860px){.road{grid-template-columns:1fr}}
+.road div{padding:14px 16px 12px 0;font-size:13px;color:var(--muted);line-height:1.5;border-right:1px dashed var(--rule);padding-left:16px}
+.road div:first-child{padding-left:0}
+.road div:last-child{border-right:0}
+@media (max-width:860px){.road div{border-right:0;padding-left:0;border-bottom:1px dashed var(--rule)}}
+.road b{display:block;color:var(--ink);font-family:var(--display);font-stretch:112%;font-size:15px;margin:4px 0}
+.road i{font-style:normal;font-family:var(--mono);font-size:10px;font-weight:600;letter-spacing:.12em;color:var(--muted)}
+.road div.now i{color:var(--ok)}
+.road div.now i::before{content:"";display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);margin-right:6px;vertical-align:1px}
+.foot{font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px 18px;justify-content:space-between;border-top:1px solid var(--rule);padding-top:12px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div class="pn-block">
+      <div class="brand">Rule<span>Chip</span></div>
+      <div class="sub">RC-WALL-01 · RULE COPROCESSOR · REV 0.3</div>
+    </div>
+    <dl class="meta-table" style="margin:0">
+      <div><dt>Network</dt><dd>X Layer · 196</dd></div>
+      <div><dt>Processor</dt><dd><a class="mono" id="procLink" target="_blank" rel="noopener"></a></dd></div>
+      <div><dt>Circuits</dt><dd>1.2.224 · 2.2.224 · 3.2.224</dd></div>
+      <div><dt>Interface</dt><dd>eval(uint256, bytes) view</dd></div>
+    </dl>
+    <div class="theme-cell"><button class="iconbtn" id="themeBtn" title="切换明暗主题" aria-label="切换明暗主题">◐ 主题</button></div>
+  </header>
+
+  <section class="thesis">
+    <div>
+      <div class="kicker">Rules are the new hardware</div>
+      <h1>Every game runs on rules. Today they're <s>code you have to trust</s>. RuleChip makes them <em>circuits you can prove</em>.</h1>
+      <p>游戏、赛事、市场、AI 对战——每个数字世界都由规则支配，而规则一直是运营方可以随时改动的代码。RuleChip 把规则从软件里拆出来，用 TapeOut 流片成链上电路：公开、不可篡改、任何人免费调用，而且小到可以被穷举证明。换一块电路，就换一套规则。</p>
+      <div class="props">
+        <div><b>可证明<small>Provable</small></b><span>规则是有限真值表，全部输入穷举验证。</span></div>
+        <div><b>不可篡改<small>Immutable</small></b><span>流片即永久，任何人都无法偷改规则。</span></div>
+        <div><b>可插拔<small>Swappable</small></b><span>统一 Rule Slot，换电路编号即换规则。</span></div>
+        <div><b>可组合<small>Composable</small></b><span>已上链的规则像芯片一样连线成新规则。</span></div>
+      </div>
+    </div>
+    <figure class="pinout" style="margin:0">
+      <svg id="pinoutSvg" viewBox="0 0 420 300" role="img" aria-label="TGRS-WALL-1 引脚图"></svg>
+      <figcaption class="cap">FIG. 1 — TGRS-WALL-1 PINOUT · 8 IN / 7 OUT · LITTLE-ENDIAN</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="no">§1</span><h2>评估板 · Evaluation board</h2><span class="note">插入一块规则芯片，然后开始游戏</span></div>
+    <div class="board-grid">
+      <div class="col">
+        <div class="pcb">
+          <p class="label">Snake · 8 × 8 field</p>
+          <div class="board-wrap">
+            <canvas id="board" width="816" height="816" aria-label="贪吃蛇棋盘"></canvas>
+            <div class="overlay" id="overlay">
+              <div class="big" id="ovTitle">RuleChip Snake</div>
+              <div class="small" id="ovSub">撞墙时会发生什么，由插在右侧插槽里的链上电路决定</div>
+              <button class="btn primary" id="startBtn">开始（空格）</button>
+              <div class="small">方向键 / WASD 控制 · 游戏中可随时换芯片</div>
+            </div>
+          </div>
+          <div class="hud">
+            <span>Score<b id="score">0</b></span>
+            <span>Length<b id="len">3</b></span>
+            <span>Rule<b id="ruleName">—</b></span>
+          </div>
+          <div class="pad" id="pad">
+            <span></span><button data-d="0" aria-label="上">▲</button><span></span>
+            <button data-d="3" aria-label="左">◀</button><button data-d="2" aria-label="下">▼</button><button data-d="1" aria-label="右">▶</button>
+          </div>
+        </div>
+
+      </div>
+
+      <div class="col">
+        <div class="panel">
+          <p class="label">Rule slot · WallRule (TGRS-WALL-1)</p>
+          <div class="slot" id="slot"></div>
+          <div class="src">
+            <span>规则来源 <span class="pill" id="srcPill">未加载</span></span>
+            <label class="toggle" title="游戏用链上读好的查找表零延迟前进；每一步同时在后台调用真实的链上 eval 核对"><input type="checkbox" id="liveToggle" checked> 每一步链上审计（先走后验）</label>
+          </div>
+        </div>
+        <div class="panel">
+          <p class="label">最近一次规则调用 · 先走后验</p>
+          <div class="trace">
+            <span>In</span><div class="bits" id="inBits"></div>
+            <span>Out</span><div class="bits" id="outBits"></div>
+          </div>
+          <div class="callline" id="callLine">eval(—, —) → —</div>
+          <div class="audit" id="auditBar">
+            <span class="st pend" id="auditState">链上审计：待开始</span>
+            <span>已确认 <b class="ok" id="aOk">0</b></span>
+            <span>进行中 <b class="pend" id="aPend">0</b></span>
+            <span>不一致 <b class="bad" id="aBad">0</b></span>
+            <span>平均确认 <b id="aLat">—</b></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="no">§2</span><h2>真值表验证 · Exhaustive on-chain test</h2><span class="note">行 = 输入高 4 位 · 列 = 低 4 位</span></div>
+    <div class="verify-grid">
+      <div class="panel">
+        <div class="vhead">
+          <p class="label" style="margin:0">256 种输入 × 链上 eval</p>
+          <button class="btn primary" id="verifyBtn">从链上验证当前芯片</button>
+        </div>
+        <div class="vwrap">
+          <div class="vcols" id="vcols"></div>
+          <div class="vrows" id="vrows"></div>
+          <div class="vgrid" id="vgrid"></div>
+        </div>
+        <div class="legend">
+          <span><i style="background:var(--pending)"></i>待调用</span>
+          <span><i style="background:var(--warn)"></i>调用中</span>
+          <span><i style="background:var(--ok)"></i>与规格一致</span>
+          <span><i style="background:color-mix(in srgb,var(--ok) 50%,var(--bad))"></i>一致且 dead=1</span>
+          <span><i style="background:var(--bad)"></i>不一致</span>
+        </div>
+      </div>
+      <div class="panel">
+        <p class="label">测试结果</p>
+        <div class="vstats" style="margin-top:0">
+          <span>Called<b id="vDone">0</b></span>
+          <span>Match<b id="vOk">0</b></span>
+          <span>Mismatch<b id="vBad">0</b></span>
+          <span>dead=1<b id="vDead">0</b></span>
+          <span>Time<b id="vTime">0.0s</b></span>
+        </div>
+        <div class="verdict" id="verdict"></div>
+        <div class="detail" id="vDetail">点击左侧任一格子，查看该输入的规格值与链上值</div>
+        <p class="label" style="margin-top:18px">规格 vs 实现</p>
+        <pre id="specCode"></pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="no">§3</span><h2>信号路径 · Signal path</h2><span class="note">引擎不含任何撞墙逻辑</span></div>
+    <div class="path">
+      <div><span class="stage">Engine</span><b>游戏引擎</b>渲染、输入、身体、食物。完全不知道撞墙规则是什么。</div>
+      <div><span class="stage">Encode</span><b>打包 8 bit</b><code>x2 x1 x0 y2 y1 y0 d1 d0</code>，小端位序。</div>
+      <div><span class="stage">Circuit</span><b>链上电路</b><code>Processor.eval(id, in)</code> 免费 view 调用，纯 NAND 网表执行。</div>
+      <div><span class="stage">Decode</span><b>7 bit 输出</b><code>nextX · nextY · dead</code>。换芯片 = 换电路编号，引擎零改动。</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-h"><span class="no">§4</span><h2>路线图 · From one snake to the rule layer</h2></div>
+    <div class="road">
+      <div class="now"><i>NOW · ON-CHAIN</i><b>Composable Snake</b>3 块电路上链：WrapWall、DeadWall，以及把它们组合成新规则的 RuleMux，全部链上穷举等价。</div>
+      <div><i>NEXT</i><b>TapeArcade</b>多款游戏共享规则电路：碰撞、计分、回合、随机数。</div>
+      <div><i>STANDARD</i><b>TGRS 规则标准</b>像 ERC 之于代币，为规则定义统一的输入/输出插槽。</div>
+      <div><i>ECONOMY</i><b>Rule Market</b>社区作者发布规则芯片，按调用与晶体管铸造获得收益。</div>
+      <div><i>FRONTIER</i><b>Provable Arenas</b>有奖竞技与 AI Agent 对战：规则中立、结果可回放验证。</div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <span>RuleChip · TapeOut Genesis Transistor Hackathon</span>
+    <span>1.2.224 WrapWall · 2.2.224 DeadWall · 3.2.224 RuleMux</span>
+  </footer>
+</div>
+
+<script>
+// ===================== Config =====================
+const PROCESSOR = "0xDa659F36172E644424D4C009BdCEC23818F0a2F9";
+const RPCS = ["https://rpc.xlayer.tech", "https://xlayerrpc.okx.com"];
+const EXPLORER = "https://www.oklink.com/xlayer/address/";
+const EVAL_SELECTOR = "934d06ea"; // keccak256("eval(uint256,bytes)")[0:4]
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";  // aggregate3 — batches many eval() view calls into one eth_call
+const MC_CHUNK = { 1:40, 2:40, 3:100 };   // ~900k gas per WallRule eval, ~340k per RuleMux; RPC eth_call cap is 50M gas
+
+const CARTRIDGES = [
+  { key:"wrap", name:"WrapWall", circuitId:"1.2.224", evalIndex:1, gates:72, transistors:374, color:"var(--wrap)",
+    desc:"撞墙后从对面出现",
+    // snapshot of on-chain eval results (2026-09-23), used only if RPC is unreachable
+    snapshot:"38393a3b3c3d3e3f3031323334353637202122232425262728292a2b2c2d2e2f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f101112131415161718191a1b1c1d1e1f08090a0b0c0d0e0f000102030405060704050607020301000c0d0e0f0a0b090814151617121311101c1d1e1f1a1b191824252627222321202c2d2e2f2a2b292834353637323331303c3d3e3f3a3b393807060405000102030f0e0c0d08090a0b17161415101112131f1e1c1d18191a1b27262425202122232f2e2c2d28292a2b37363435303132333f3e3c3d38393a3b" },
+  { key:"dead", name:"DeadWall", circuitId:"2.2.224", evalIndex:2, gates:70, transistors:364, color:"var(--dead)",
+    desc:"撞墙即死亡（经典规则）",
+    snapshot:"78797a7b7c7d7e7f3031323334353637202122232425262728292a2b2c2d2e2f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f101112131415161718191a1b1c1d1e1f08090a0b0c0d0e0f404142434445464704050607020301400c0d0e0f0a0b094814151617121311501c1d1e1f1a1b195824252627222321602c2d2e2f2a2b296834353637323331703c3d3e3f3a3b397847060405000102034f0e0c0d08090a0b57161415101112135f1e1c1d18191a1b67262425202122236f2e2c2d28292a2b77363435303132337f3e3c3d38393a3b" },
+  { key:"hybrid", name:"HybridWall", circuitId:"3.2.224", evalIndex:3, gates:22, transistors:null, color:"var(--hybrid)",
+    desc:"上下撞墙即死，左右穿墙而过",
+    composite:{ a:1, b:2, mux:3 },   // out = RuleMux( WrapWall(in), DeadWall(in), d0 )
+    snapshot:"78797a7b7c7d7e7f3031323334353637202122232425262728292a2b2c2d2e2f000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f101112131415161718191a1b1c1d1e1f08090a0b0c0d0e0f404142434445464704050607020301000c0d0e0f0a0b090814151617121311101c1d1e1f1a1b191824252627222321202c2d2e2f2a2b292834353637323331303c3d3e3f3a3b393807060405000102030f0e0c0d08090a0b17161415101112131f1e1c1d18191a1b27262425202122232f2e2c2d28292a2b37363435303132333f3e3c3d38393a3b" },
+];
+
+// ===================== Bit interface (TGRS-WALL-1) =====================
+// dir: 0=UP(y-1) 1=RIGHT(x+1) 2=DOWN(y+1) 3=LEFT(x-1)
+const IN_NAMES  = ["x2","x1","x0","y2","y1","y0","d1","d0"];   // bit0..bit7 (little-endian)
+const OUT_NAMES = ["nx2","nx1","nx0","ny2","ny1","ny0","dead"];
+function encode(x, y, d){
+  const b=[(x>>2)&1,(x>>1)&1,x&1,(y>>2)&1,(y>>1)&1,y&1,(d>>1)&1,d&1];
+  return b.reduce((acc,v,i)=>acc|(v<<i),0);
+}
+function decodeIn(byte){
+  const bit=i=>(byte>>i)&1;
+  return { x:bit(0)*4+bit(1)*2+bit(2), y:bit(3)*4+bit(4)*2+bit(5), d:bit(6)*2+bit(7) };
+}
+function decodeOut(o){
+  const bit=i=>(o>>i)&1;
+  return { nx:bit(0)*4+bit(1)*2+bit(2), ny:bit(3)*4+bit(4)*2+bit(5), dead:bit(6) };
+}
+function encodeOut(nx, ny, dead){
+  return ((nx>>2)&1)|(((nx>>1)&1)<<1)|((nx&1)<<2)|(((ny>>2)&1)<<3)|(((ny>>1)&1)<<4)|((ny&1)<<5)|(dead<<6);
+}
+
+// ===================== Reference rules (the spec) =====================
+const DIRV = [[0,-1],[1,0],[0,1],[-1,0]];
+const REFERENCE = {
+  wrap(x,y,d){ const [dx,dy]=DIRV[d]; return { nx:(x+dx+8)%8, ny:(y+dy+8)%8, dead:0 }; },
+  dead(x,y,d){ const [dx,dy]=DIRV[d]; const nx=x+dx, ny=y+dy;
+               const oob = nx<0||nx>7||ny<0||ny>7;
+               return { nx:(nx+8)%8, ny:(ny+8)%8, dead: oob?1:0 }; },
+  hybrid(x,y,d){ const [dx,dy]=DIRV[d]; const ny=y+dy;
+               return { nx:(x+dx+8)%8, ny:(ny+8)%8, dead: (ny<0||ny>7)?1:0 }; },
+};
+document.getElementById("specCode").textContent =
+`// 参考规则（人读的规格），链上电路必须与之 256/256 等价
+wrap(x, y, d) { [dx,dy] = DIR[d]
+  return { nx:(x+dx)&7, ny:(y+dy)&7, dead:0 } }
+
+dead(x, y, d) { [dx,dy] = DIR[d]
+  oob = x+dx ∉ [0,7] || y+dy ∉ [0,7]
+  return { nx:(x+dx)&7, ny:(y+dy)&7, dead:oob } }
+
+// 链上实现：Processor ${PROCESSOR.slice(0,8)}…
+//   eval(1, in) → WrapWall  电路 1.2.224 · 72 NAND
+//   eval(2, in) → DeadWall  电路 2.2.224 · 70 NAND
+
+// 组合规则：不新写规则，只把两块已上链的电路"连线"
+hybrid(x, y, d) = RuleMux( wrap(x,y,d), dead(x,y,d), sel = d0 )
+//   eval(3, a|b<<7|d0<<14) → RuleMux  电路 3.2.224 · 22 NAND
+//   左右移动 (d0=1) 取 WrapWall，上下移动 (d0=0) 取 DeadWall`;
+
+// ===================== Chain access =====================
+const pad64 = h => h.padStart(64,"0");
+function evalCalldata(index, input){
+  const bytes = Array.isArray(input) ? input : [input];
+  const hex = bytes.map(b=>b.toString(16).padStart(2,"0")).join("");
+  return "0x"+EVAL_SELECTOR+pad64(index.toString(16))+pad64("40")+pad64(bytes.length.toString(16))+hex.padEnd(64,"0");
+}
+let rpcIdx = 0;
+// Timeout without AbortSignal (some embedded previews proxy fetch via postMessage and cannot clone AbortSignal)
+function withTimeout(promise, ms){
+  let t; return Promise.race([ promise.finally(()=>clearTimeout(t)), new Promise((_,rej)=>{ t=setTimeout(()=>rej(new Error("timeout "+ms+"ms")), ms); }) ]);
+}
+async function postJSON(url, body, ms){
+  const r = await withTimeout(fetch(url,{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify(body)}), ms);
+  return withTimeout(r.json(), ms);
+}
+async function rpcEval(index, byte, timeoutMs=6000){
+  let lastErr;
+  for (let attempt=0; attempt<4; attempt++){
+    const url = RPCS[(rpcIdx + attempt) % RPCS.length];
+    try{
+      const j = await postJSON(url, {jsonrpc:"2.0",id:1,method:"eth_call",params:[{to:PROCESSOR,data:evalCalldata(index,byte)},"latest"]}, timeoutMs);
+      if (!j.result) throw new Error(j.error ? j.error.message : "empty result");
+      const hex = j.result.slice(2);
+      const len = parseInt(hex.slice(64,128),16);
+      if (len < 1) throw new Error("empty bytes");
+      return parseInt(hex.slice(128,130),16);
+    }catch(e){ lastErr=e; if (attempt===0) rpcIdx=(rpcIdx+1)%RPCS.length; await new Promise(s=>setTimeout(s,250*(attempt+1))); }
+  }
+  throw lastErr;
+}
+// Run one input through a cartridge on-chain. Simple cartridge = 1 eval; composite = 2 evals + RuleMux eval.
+async function chainRun(cart, b, timeoutMs=6000){
+  if (!cart.composite) { const out = await rpcEval(cart.evalIndex, b, timeoutMs); return { out, a:null, k:null }; }
+  const c = cart.composite;
+  const [a, k] = await Promise.all([ rpcEval(c.a, b, timeoutMs), rpcEval(c.b, b, timeoutMs) ]);
+  const v = a | (k<<7) | (((b>>7)&1)<<14);                       // RuleMux input: a(7) | b(7) | d0
+  const out = await rpcEval(c.mux, [v & 0xff, v >> 8], timeoutMs);
+  return { out, a, k, muxIn:v };
+}
+function callsPerInput(cart){ return cart.composite ? 3 : 1; }
+
+// ---------- Multicall3 batching ----------
+const w64 = h => h.padStart(64,"0");
+function aggregate3Data(calls){           // calls: [{index, input:[bytes]}]
+  const target = w64(PROCESSOR.slice(2).toLowerCase());
+  const elems = calls.map(c=>{
+    const cd = evalCalldata(c.index, c.input).slice(2); const L = cd.length/2;
+    return target + w64("1") + w64("60") + w64(L.toString(16)) + cd.padEnd(Math.ceil(L/32)*64,"0");
+  });
+  let off = calls.length*32; const offs = elems.map(e=>{ const o=w64(off.toString(16)); off+=e.length/2; return o; });
+  return "0x82ad56cb" + w64("20") + w64(calls.length.toString(16)) + offs.join("") + elems.join("");
+}
+function decodeAggregate3(res){
+  const h = res.slice(2), N = parseInt(h.slice(64,128),16), arr = 128, out = [];
+  for (let i=0;i<N;i++){
+    const e = arr + parseInt(h.slice(arr+i*64, arr+i*64+64),16)*2;
+    const ok = parseInt(h.slice(e,e+64),16);
+    const rd = e + parseInt(h.slice(e+64,e+128),16)*2;
+    const len = parseInt(h.slice(rd,rd+64),16); const data = h.slice(rd+64, rd+64+len*2);
+    out.push(ok && len>=96 ? parseInt(data.slice(128,130),16) : null);
+  }
+  return out;
+}
+async function multicall(calls){
+  let lastErr;
+  for (let attempt=0; attempt<3; attempt++){
+    const url = RPCS[(rpcIdx + attempt) % RPCS.length];
+    try{
+      const j = await postJSON(url, {jsonrpc:"2.0",id:1,method:"eth_call",params:[{to:MULTICALL3,data:aggregate3Data(calls)},"latest"]}, 12000);
+      if (!j.result) throw new Error(j.error ? j.error.message : "empty result");
+      const out = decodeAggregate3(j.result);
+      if (out.some(v=>v===null)) throw new Error("sub-call failed");
+      return out;
+    }catch(e){ lastErr=e; await new Promise(s=>setTimeout(s,300*(attempt+1))); }
+  }
+  throw lastErr;
+}
+// Evaluate one circuit on many inputs, batched + parallel. onChunk(indicesDone) for progress.
+async function evalMany(index, inputs, onChunk){
+  const size = MC_CHUNK[index] || 40, jobs = [];
+  for (let i=0;i<inputs.length;i+=size){
+    const idx = [...Array(Math.min(size, inputs.length-i)).keys()].map(k=>i+k);
+    jobs.push(multicall(idx.map(k=>({index, input:inputs[k]}))).then(r=>{ onChunk && onChunk(idx, r); return {idx, r}; }));
+  }
+  const out = new Array(inputs.length);
+  for (const {idx, r} of await Promise.all(jobs)) idx.forEach((k,j)=>out[k]=r[j]);
+  return out;
+}
+// Whole cartridge over all 256 inputs. cache = reuse already-loaded circuit tables (not used for verification).
+const circuitCache = {};
+async function chainRunAll(cart, { useCache=true, onProgress } = {}){
+  const inputs = [...Array(256).keys()].map(b=>[b]);
+  const table = async (index, weight) => {
+    if (useCache && circuitCache[index]) { onProgress && onProgress([...Array(256).keys()], weight, true); return circuitCache[index]; }
+    const t = await evalMany(index, inputs, idx=>onProgress && onProgress(idx, weight));
+    circuitCache[index] = t; return t;
+  };
+  if (!cart.composite) { const out = await table(cart.evalIndex, 1); return { out, parts:null }; }
+  const c = cart.composite;
+  const [a, k] = await Promise.all([ table(c.a, 1/3), table(c.b, 1/3) ]);
+  const muxIn = [...Array(256).keys()].map(b => a[b] | (k[b]<<7) | (((b>>7)&1)<<14));
+  const out = await evalMany(c.mux, muxIn.map(v=>[v&0xff, v>>8]), idx=>onProgress && onProgress(idx, 1/3, false, true));
+  return { out, parts: out.map((_,b)=>({ a:a[b], k:k[b], muxIn:muxIn[b] })) };
+}
+async function pool(n, total, worker){
+  let i=0; const run=async()=>{ while(i<total){ const k=i++; await worker(k); } };
+  await Promise.all(Array.from({length:n},run));
+}
+
+// ===================== RuleRuntime =====================
+// The engine only ever talks to this interface: load(cartridge) / evaluate(inputByte) -> outputByte
+class RuleRuntime {
+  constructor(){ this.cart=null; this.lut=null; this.source="none"; this.audit=true; }
+  async load(cart, onProgress){
+    this.cart = cart; this.lut = null;
+    const lut = new Array(256).fill(null); let done=0;
+    try{
+      let prog = 0;
+      try {
+        const r = await chainRunAll(cart, { onProgress:(idx,wt)=>{ prog += idx.length*wt*callsPerInput(cart); onProgress && onProgress(Math.min(256*callsPerInput(cart), Math.round(prog))); } });
+        this.lut = r.out; this.parts = r.parts; this.source = "chain";
+      } catch(batchErr) {
+        console.warn("Multicall3 path failed, falling back to single calls", batchErr);
+        const parts = new Array(256).fill(null);
+        await pool(cart.composite ? 16 : 32, 256, async b => { const r = await chainRun(cart, b); lut[b] = r.out; parts[b] = r; done++; onProgress && onProgress(done*callsPerInput(cart)); });
+        this.lut = lut; this.parts = parts; this.source = "chain";
+      }
+    }catch(e){
+      console.warn("RPC unreachable, falling back to snapshot", e);
+      this.lut = Array.from({length:256},(_,i)=>parseInt(cart.snapshot.slice(i*2,i*2+2),16));
+      this.parts = null; this.source = "snapshot"; this.loadError = String(e && e.message || e);
+    }
+  }
+  // Optimistic: answer instantly from the on-chain-loaded table (zero latency for the game loop)
+  async evaluate(byte){
+    return { out: this.lut[byte], via: this.source, parts: this.parts ? this.parts[byte] : null };
+  }
+  // ...and audit that exact step against a fresh on-chain eval in the background
+  auditStep(byte, expectedOut, onDone){
+    const cart = this.cart, t0 = performance.now();
+    chainRun(cart, byte, 8000)
+      .then(r => onDone({ ok: r.out === expectedOut, chainOut: r.out, parts: r, ms: performance.now()-t0, cart }))
+      .catch(err => onDone({ ok: null, error: err, ms: performance.now()-t0, cart }));
+  }
+}
+
+// ===================== Game engine (rule-agnostic) =====================
+const N = 8;
+const canvas = document.getElementById("board"), ctx = canvas.getContext("2d");
+const rule = new RuleRuntime();
+const S = { snake:[], dir:1, queued:[], food:null, score:0, running:false, over:false, ticking:false, timer:null, flash:null };
+const TICK_MS = 260;
+
+const A = { ok:0, pend:0, bad:0, fail:0, latSum:0, step:0, gen:0 };
+function resetAudit(){ Object.assign(A,{ok:0,pend:0,bad:0,fail:0,latSum:0}); A.gen++; renderAudit(); }
+function renderAudit(last){
+  document.getElementById("aOk").textContent=A.ok; document.getElementById("aPend").textContent=A.pend;
+  document.getElementById("aBad").textContent=A.bad;
+  document.getElementById("aLat").textContent = A.ok ? Math.round(A.latSum/A.ok)+" ms" : "—";
+  const st=document.getElementById("auditState");
+  if (!rule.audit){ st.className="st"; st.textContent="链上审计：已关闭（仅查表）"; return; }
+  if (A.bad){ st.className="st bad"; st.textContent="✗ 链上审计发现不一致"; return; }
+  if (last && last.ok){ st.className="st ok"; st.textContent=`✓ 第 ${last.step} 步已被链上确认`; return; }
+  if (A.pend){ st.className="st pend"; st.textContent="⏳ 等待链上确认…"; return; }
+  st.className="st pend"; st.textContent= A.fail ? `链上审计：${A.fail} 次 RPC 超时（未计入）` : "链上审计：待开始";
+}
+function launchAudit(inByte, out){
+  if (!rule.audit || rule.source!=="chain") return;
+  const step = ++A.step, gen = A.gen; A.pend++; renderAudit();
+  rule.auditStep(inByte, out, res=>{
+    if (gen!==A.gen) return;          // stale audit from a previous game
+    A.pend--;
+    if (res.ok===null){ A.fail++; renderAudit(); return; }
+    if (res.ok){ A.ok++; A.latSum+=res.ms; renderAudit({ok:true, step}); }
+    else {
+      A.bad++; renderAudit();
+      if (S.running){ S.running=false; clearTimeout(S.timer);
+        showOverlay("链上审计不一致", `第 ${step} 步：查表 0x${out.toString(16)} ≠ 链上 eval 0x${res.chainOut.toString(16)}（${res.cart.name}）`, "继续（空格）"); }
+    }
+  });
+}
+function resetGame(){
+  S.snake=[{x:2,y:3},{x:1,y:3},{x:0,y:3}]; S.dir=1; S.queued=[]; S.score=0; S.over=false; S.flash=null; A.step=0; resetAudit();
+  placeFood(); updateHud(); draw();
+}
+function placeFood(){
+  const free=[]; for(let y=0;y<N;y++)for(let x=0;x<N;x++) if(!S.snake.some(s=>s.x===x&&s.y===y)) free.push({x,y});
+  S.food = free.length ? free[Math.floor(Math.random()*free.length)] : null;
+}
+function turn(d){
+  const last = S.queued.length ? S.queued[S.queued.length-1] : S.dir;
+  if (d===last || (d+2)%4===last) return;
+  if (S.queued.length<2) S.queued.push(d);
+}
+async function tick(){
+  if (!S.running || S.ticking) return;
+  S.ticking = true;
+  if (S.queued.length) S.dir = S.queued.shift();
+  const head = S.snake[0];
+  const inByte = encode(head.x, head.y, S.dir);
+  const { out, via, parts } = await rule.evaluate(inByte);          // <-- the ONLY place the rule is consulted
+  const r = decodeOut(out);
+  showTrace(inByte, out, via, parts);
+  launchAudit(inByte, out);                                        // verify this exact step on-chain, in the background
+  if (!S.running){ S.ticking=false; return; }
+  const [dx,dy]=DIRV[S.dir]; const crossed = head.x+dx<0||head.x+dx>7||head.y+dy<0||head.y+dy>7;
+  if (r.dead){ S.flash={x:head.x,y:head.y,dir:S.dir}; return gameOver("撞墙了", `${rule.cart.name} 电路输出 dead = 1`); }
+  const next = {x:r.nx, y:r.ny};
+  const eating = S.food && next.x===S.food.x && next.y===S.food.y;
+  const body = eating ? S.snake : S.snake.slice(0,-1);
+  if (body.some(s=>s.x===next.x&&s.y===next.y)){ return gameOver("咬到自己了", "（自身碰撞由引擎判断，不属于 WallRule）"); }
+  S.snake.unshift(next); if (!eating) S.snake.pop();
+  if (crossed) S.flash={x:next.x,y:next.y,t:performance.now(),wrap:true};
+  if (eating){ S.score+=10; placeFood(); if(!S.food) return gameOver("通关！", "蛇已经填满整个棋盘"); }
+  updateHud(); draw();
+  S.ticking = false;
+  S.timer = setTimeout(tick, TICK_MS);
+}
+function gameOver(title, sub){
+  S.running=false; S.over=true; S.ticking=false; clearTimeout(S.timer); draw();
+  showOverlay(title, `${sub} · 分数 ${S.score}`, "再来一局（空格）");
+}
+function start(){
+  if (!rule.lut) return;
+  if (S.over || !S.snake.length) resetGame();
+  hideOverlay(); S.running=true; clearTimeout(S.timer); S.timer=setTimeout(tick, TICK_MS);
+}
+function pause(){ S.running=false; clearTimeout(S.timer); showOverlay("暂停", "可以趁现在换一块卡带", "继续（空格）"); }
+
+// ===================== Rendering =====================
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+function draw(){
+  const W=canvas.width, c=W/N; ctx.clearRect(0,0,W,W);
+  for(let y=0;y<N;y++)for(let x=0;x<N;x++){ ctx.fillStyle=(x+y)%2?css("--grid2"):css("--grid"); ctx.fillRect(x*c,y*c,c,c); }
+  // wall border in rule color
+  // walls: solid red = deadly, dashed blue = wrap
+  const k = rule.cart ? rule.cart.key : null;
+  const hDead = k==="dead"||k==="hybrid", vDead = k==="dead";          // h = top/bottom walls, v = left/right walls
+  const side=(x1,y1,x2,y2,dead)=>{ ctx.beginPath(); ctx.lineWidth=10; ctx.strokeStyle = !k?css("--line"):dead?css("--dead"):css("--wrap");
+    ctx.setLineDash(!k||dead?[]:[26,18]); ctx.moveTo(x1,y1); ctx.lineTo(x2,y2); ctx.stroke(); ctx.setLineDash([]); };
+  side(0,5,W,5,hDead); side(0,W-5,W,W-5,hDead); side(5,0,5,W,vDead); side(W-5,0,W-5,W,vDead);
+  if (S.food){ ctx.fillStyle=css("--food"); ctx.beginPath(); ctx.arc(S.food.x*c+c/2,S.food.y*c+c/2,c*0.28,0,Math.PI*2); ctx.fill(); }
+  S.snake.forEach((s,i)=>{ ctx.fillStyle = i===0?css("--head"):css("--snake"); const p=i===0?c*0.08:c*0.14; roundRect(s.x*c+p,s.y*c+p,c-2*p,c-2*p,c*0.18); });
+  if (S.flash && S.over && S.flash.dir!==undefined){ ctx.fillStyle=css("--bad"); ctx.globalAlpha=.35; ctx.fillRect(S.flash.x*c,S.flash.y*c,c,c); ctx.globalAlpha=1; }
+  if (S.flash && S.flash.wrap && performance.now()-S.flash.t<500){ ctx.strokeStyle=css("--wrap"); ctx.lineWidth=6; ctx.strokeRect(S.flash.x*c+4,S.flash.y*c+4,c-8,c-8); }
+}
+function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.fill(); }
+function updateHud(){
+  document.getElementById("score").textContent=S.score;
+  document.getElementById("len").textContent=S.snake.length;
+  document.getElementById("ruleName").textContent=rule.cart?rule.cart.name:"—";
+}
+const overlay=document.getElementById("overlay");
+function showOverlay(t,s,btn){ document.getElementById("ovTitle").textContent=t; document.getElementById("ovSub").textContent=s; document.getElementById("startBtn").textContent=btn; overlay.classList.remove("hidden"); }
+function hideOverlay(){ overlay.classList.add("hidden"); }
+
+function bitsHtml(names, byte, deadIdx){
+  return names.map((n,i)=>{ const v=(byte>>i)&1; const cls = v ? (i===deadIdx?"bit deadon":"bit on") : "bit"; return `<div class="${cls}"><small>${n}</small>${v}</div>`; }).join("");
+}
+function showTrace(inByte, out, via, parts){
+  document.getElementById("inBits").innerHTML = bitsHtml(IN_NAMES, inByte, -1);
+  document.getElementById("outBits").innerHTML = bitsHtml(OUT_NAMES, out, 6);
+  const i=decodeIn(inByte), o=decodeOut(out);
+  const src = via==="live" ? "链上实时 eval" : via==="chain" ? "链上加载的查找表" : "离线快照";
+  const h2=n=>"0x"+n.toString(16).padStart(2,"0");
+  const c=rule.cart.composite;
+  const call = !c ? `eval(${rule.cart.evalIndex}, ${h2(inByte)}) → ${h2(out)}`
+    : parts && parts.a!=null ? `eval(1, ${h2(inByte)}) → ${h2(parts.a)} ⊕ eval(2, ${h2(inByte)}) → ${h2(parts.k)} ⇒ eval(3, 0x${parts.muxIn.toString(16).padStart(4,"0")}) → ${h2(out)}`
+    : `RuleMux(eval(1), eval(2)) → ${h2(out)}`;
+  document.getElementById("callLine").textContent =
+    `${call}   (${i.x},${i.y}) ${["UP","RIGHT","DOWN","LEFT"][i.d]} → (${o.nx},${o.ny}) dead=${o.dead}   · 来源：${src}`;
+}
+
+// ===================== Cartridge slot UI =====================
+const slot=document.getElementById("slot"), srcPill=document.getElementById("srcPill");
+CARTRIDGES.forEach(cart=>{
+  const el=document.createElement("button"); el.className="cart"; el.style.setProperty("--c",cart.color); el.dataset.key=cart.key;
+  el.setAttribute("aria-label", `插入 ${cart.name}`);
+  el.innerHTML=`<span class="notch"></span><span class="dot"></span><div class="pn">TO-${cart.circuitId}</div><div class="name"><i></i>${cart.name}</div><div class="desc">${cart.desc}</div>
+    ${cart.composite
+      ? `<div class="meta">= RuleMux(<b class="mono">1.2.224</b>, <b class="mono">2.2.224</b>)<br>组合电路 <b class="mono">${cart.circuitId}</b> · ${cart.gates} NAND · 复用 2 块已上链电路</div><div class="combo">⛓ 组合规则 · 每个输入 3 次 eval</div>`
+      : `<div class="meta">电路 <b class="mono">${cart.circuitId}</b> · eval(<b>${cart.evalIndex}</b>, …)<br>${cart.gates} NAND · ${cart.transistors} 晶体管 · 8 in / 7 out</div>`}`;
+  el.onclick=()=>insert(cart);
+  slot.appendChild(el);
+});
+let inserting=false;
+async function insert(cart){
+  if (inserting || (rule.cart===cart && rule.lut)) return;
+  inserting=true;
+  const wasRunning=S.running; if (wasRunning){ S.running=false; clearTimeout(S.timer); }
+  [...slot.children].forEach(c=>{ c.classList.remove("active","loading"); if(c.dataset.key===cart.key) c.classList.add("active","loading"); });
+  const total = 256*callsPerInput(cart);
+  srcPill.className="pill"; srcPill.textContent=`正在从链上读取 0/${total} 次 eval…`;
+  await rule.load(cart, n=>{ srcPill.textContent=`正在从链上读取 ${n}/${total} 次 eval…`; });
+  [...slot.children].forEach(c=>c.classList.remove("loading"));
+  refreshSrcPill(); updateHud(); draw(); resetVerifyGrid();
+  inserting=false;
+  if (wasRunning){ S.running=true; S.ticking=false; S.timer=setTimeout(tick, TICK_MS); }
+}
+function refreshSrcPill(){
+  if (rule.source==="chain"){ srcPill.className="pill chain"; srcPill.textContent=`链上 eval × ${256*callsPerInput(rule.cart)} → 查找表 ✓`; }
+  else { srcPill.className="pill snap"; srcPill.textContent="RPC 不可达：使用离线快照"; srcPill.title = rule.loadError || ""; }
+}
+document.getElementById("liveToggle").onchange=e=>{ rule.audit=e.target.checked; renderAudit(); };
+
+// ===================== On-chain verification =====================
+const vgrid=document.getElementById("vgrid"); const cells=[];
+for(let b=0;b<256;b++){ const d=document.createElement("div"); d.title=`input 0x${b.toString(16).padStart(2,"0")}`; d.onclick=()=>showCell(b); vgrid.appendChild(d); cells.push(d); }
+let vResults=new Array(256).fill(null), verifying=false;
+function resetVerifyGrid(){
+  vResults=new Array(256).fill(null); cells.forEach(c=>c.className="");
+  ["vDone","vOk","vBad","vDead"].forEach(id=>document.getElementById(id).textContent="0");
+  document.getElementById("vTime").textContent="0.0s";
+  document.getElementById("verdict").className="verdict";
+  document.getElementById("vDetail").textContent = rule.cart ? `待验证：${rule.cart.name}（电路 ${rule.cart.circuitId}）` : "点击任一格子查看该输入的链上结果";
+}
+function showCell(b){
+  cells.forEach(c=>c.classList.remove("sel")); cells[b].classList.add("sel");
+  const i=decodeIn(b); if(!rule.cart) return;
+  const exp=REFERENCE[rule.cart.key](i.x,i.y,i.d); const r=vResults[b];
+  const got = r==null ? "未调用" : (typeof r==="number" ? (()=>{const o=decodeOut(r);return `(${o.nx},${o.ny}) dead=${o.dead}  [0x${r.toString(16).padStart(2,"0")}]`;})() : "调用失败");
+  document.getElementById("vDetail").textContent =
+    `输入 0x${b.toString(16).padStart(2,"0")} = (${i.x},${i.y}) ${["UP","RIGHT","DOWN","LEFT"][i.d]} · 参考规则 (${exp.nx},${exp.ny}) dead=${exp.dead} · 链上 ${got}`;
+}
+document.getElementById("verifyBtn").onclick=async()=>{
+  if (verifying || !rule.cart) return;
+  verifying=true; const btn=document.getElementById("verifyBtn"); btn.disabled=true; btn.textContent="验证中…";
+  resetVerifyGrid();
+  const cart=rule.cart, t0=performance.now(); let done=0, ok=0, bad=0, dead=0;
+  const tick=setInterval(()=>document.getElementById("vTime").textContent=((performance.now()-t0)/1000).toFixed(1)+"s",100);
+  const judge = (b, got) => {
+    const i=decodeIn(b); const e=REFERENCE[cart.key](i.x,i.y,i.d); const expected=encodeOut(e.nx,e.ny,e.dead);
+    vResults[b]=got; done++;
+    if (got===expected){ ok++; if((got>>6)&1){dead++; cells[b].className="okd";} else cells[b].className="ok"; }
+    else { bad++; cells[b].className="bad"; }
+    document.getElementById("vDone").textContent=done; document.getElementById("vOk").textContent=ok;
+    document.getElementById("vBad").textContent=bad; document.getElementById("vDead").textContent=dead;
+  };
+  cells.forEach(c=>c.className="run");
+  try {
+    // fresh on-chain run (no cache); for composite, first stage paints cells half-way, final stage judges
+    // fresh on-chain run, no cache: results stream in chunk by chunk
+    const inputs = [...Array(256).keys()].map(b=>[b]);
+    if (!cart.composite) {
+      await evalMany(cart.evalIndex, inputs, (idx, r)=>idx.forEach((b,j)=>judge(b, r[j])));
+    } else {
+      const c = cart.composite;
+      const [a, k] = await Promise.all([ evalMany(c.a, inputs), evalMany(c.b, inputs) ]);
+      cells.forEach(el=>el.className="half");
+      const muxIn = inputs.map(([b]) => a[b] | (k[b]<<7) | (((b>>7)&1)<<14));
+      await evalMany(c.mux, muxIn.map(v=>[v&0xff, v>>8]), (idx, r)=>idx.forEach((b,j)=>judge(b, r[j])));
+    }
+  } catch(batchErr) {
+    console.warn("batched verify failed, falling back to single calls", batchErr);
+    done=ok=bad=dead=0;
+    await pool(cart.composite ? 16 : 32, 256, async b=>{ let got; try{ got=(await chainRun(cart,b)).out; }catch(err){ got="ERR"; } judge(b,got); });
+  }
+  clearInterval(tick);
+  const secs=((performance.now()-t0)/1000).toFixed(1); document.getElementById("vTime").textContent=secs+"s";
+  const v=document.getElementById("verdict");
+  if (bad===0){ v.className="verdict ok"; v.textContent = cart.composite
+    ? `✓ ${cart.name} = RuleMux(1.2.224, 2.2.224) 经 ${256*3} 次链上 eval，256/256 种输入与参考规则完全等价 · ${secs}s`
+    : `✓ ${cart.name}（电路 ${cart.circuitId}）在 X Layer 上 256/256 种输入与参考规则完全等价 · ${secs}s`; }
+  else { v.className="verdict bad"; v.textContent=`✗ ${bad} 个输入不一致或调用失败，点击红色格子查看详情`; }
+  btn.disabled=false; btn.textContent="从链上验证当前芯片"; verifying=false;
+};
+
+// ===================== Input & boot =====================
+const KEYMAP={ArrowUp:0,KeyW:0,ArrowRight:1,KeyD:1,ArrowDown:2,KeyS:2,ArrowLeft:3,KeyA:3};
+addEventListener("keydown",e=>{
+  if (e.code in KEYMAP){ e.preventDefault(); if(S.running) turn(KEYMAP[e.code]); }
+  else if (e.code==="Space"){ e.preventDefault(); S.running?pause():start(); }
+});
+document.getElementById("startBtn").onclick=()=>start();
+document.querySelectorAll("#pad button").forEach(b=>b.onclick=()=>{ if(!S.running) start(); turn(+b.dataset.d); });
+let touch=null;
+canvas.addEventListener("touchstart",e=>{touch=e.touches[0];},{passive:true});
+canvas.addEventListener("touchend",e=>{ if(!touch) return; const t=e.changedTouches[0]; const dx=t.clientX-touch.clientX, dy=t.clientY-touch.clientY;
+  if (Math.max(Math.abs(dx),Math.abs(dy))>20) turn(Math.abs(dx)>Math.abs(dy)?(dx>0?1:3):(dy>0?2:0)); touch=null; });
+
+// axis labels for the 16x16 truth-table grid (row = high nibble, col = low nibble)
+document.getElementById("vcols").innerHTML=[...Array(16)].map((_,i)=>`<span>${i.toString(16).toUpperCase()}</span>`).join("");
+document.getElementById("vrows").innerHTML=[...Array(16)].map((_,i)=>`<span>${i.toString(16).toUpperCase()}_</span>`).join("");
+// FIG.1 pinout drawn from the real interface definition
+(function drawPinout(){
+  const svg=document.getElementById("pinoutSvg"); const W=420, H=300, bx=135, by=26, bw=150, bh=248;
+  const pinsL=IN_NAMES, pinsR=OUT_NAMES; const stepL=bh/(pinsL.length+1), stepR=bh/(pinsR.length+1);
+  let g=`<rect x="${bx}" y="${by}" width="${bw}" height="${bh}" fill="var(--chip)" rx="3"/>
+    <path d="M${bx+bw/2-14} ${by} a14 14 0 0 0 28 0" fill="var(--sheet)"/>
+    <circle cx="${bx+16}" cy="${by+18}" r="4" fill="var(--chip-mute)" opacity=".5"/>
+    <text x="${bx+bw/2}" y="${by+bh/2-10}" text-anchor="middle" fill="var(--chip-ink)" font-family="Archivo, sans-serif" font-weight="800" font-size="17">WallRule</text>
+    <text x="${bx+bw/2}" y="${by+bh/2+10}" text-anchor="middle" fill="var(--chip-mute)" font-family="IBM Plex Mono, monospace" font-size="10.5">TGRS-WALL-1</text>
+    <text x="${bx+bw/2}" y="${by+bh/2+26}" text-anchor="middle" fill="var(--chip-mute)" font-family="IBM Plex Mono, monospace" font-size="10.5">~70 NAND</text>`;
+  pinsL.forEach((n,i)=>{ const y=by+stepL*(i+1);
+    g+=`<rect x="${bx-22}" y="${y-3}" width="22" height="6" fill="var(--gold)"/>
+        <text x="${bx-28}" y="${y+4}" text-anchor="end" fill="var(--ink)" font-family="IBM Plex Mono, monospace" font-size="12">${n}</text>
+        <text x="${bx+8}" y="${y+3.5}" fill="var(--chip-mute)" font-family="IBM Plex Mono, monospace" font-size="9">${i}</text>`; });
+  pinsR.forEach((n,i)=>{ const y=by+stepR*(i+1);
+    g+=`<rect x="${bx+bw}" y="${y-3}" width="22" height="6" fill="var(--gold)"/>
+        <text x="${bx+bw+28}" y="${y+4}" fill="${n==="dead"?"var(--bad)":"var(--ink)"}" font-family="IBM Plex Mono, monospace" font-size="12">${n}</text>
+        <text x="${bx+bw-8}" y="${y+3.5}" text-anchor="end" fill="var(--chip-mute)" font-family="IBM Plex Mono, monospace" font-size="9">${i}</text>`; });
+  g+=`<text x="6" y="16" fill="var(--muted)" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1">IN · x, y, dir</text>
+      <text x="${W-6}" y="16" text-anchor="end" fill="var(--muted)" font-family="IBM Plex Mono, monospace" font-size="10" letter-spacing="1">OUT · next, dead</text>`;
+  svg.innerHTML=g;
+})();
+const pl=document.getElementById("procLink"); pl.href=EXPLORER+PROCESSOR; pl.textContent=PROCESSOR.slice(0,6)+"…"+PROCESSOR.slice(-4);
+const themeBtn=document.getElementById("themeBtn");
+themeBtn.onclick=()=>{ const cur=document.documentElement.dataset.theme || (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light");
+  document.documentElement.dataset.theme = cur==="dark"?"light":"dark"; draw(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",draw);
+
+document.getElementById("startBtn").disabled=true;
+resetGame();
+insert(CARTRIDGES[1]).then(()=>{ document.getElementById("startBtn").disabled=false; });
+</script>
+</body>
+</html>
